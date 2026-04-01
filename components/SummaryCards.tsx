@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { TrendingUp, CreditCard, Banknote, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, CreditCard, Banknote, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import type { Summary } from '@/lib/reconcile';
 import { formatARS } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -18,13 +18,31 @@ interface CardProps {
   bgClass: string;
   borderClass: string;
   subtitle?: string;
+  tooltip: string;
 }
 
-function Card({ title, value, icon, colorClass, bgClass, borderClass, subtitle }: CardProps) {
+function Card({ title, value, icon, colorClass, bgClass, borderClass, subtitle, tooltip }: CardProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   return (
-    <div className={cn('rounded-xl border p-4 flex flex-col gap-2 flex-1 min-w-0', bgClass, borderClass)}>
+    <div className={cn('rounded-xl border p-4 flex flex-col gap-2 flex-1 min-w-0 relative', bgClass, borderClass)}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide leading-tight">{title}</p>
+        <div className="flex items-center gap-1">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide leading-tight">{title}</p>
+          <div
+            className="relative"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          >
+            <Info className="w-3 h-3 text-gray-400 cursor-help flex-shrink-0" />
+            {showTooltip && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg z-10 leading-relaxed pointer-events-none">
+                {tooltip}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+              </div>
+            )}
+          </div>
+        </div>
         <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', colorClass, 'bg-white/60')}>
           {icon}
         </div>
@@ -49,6 +67,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         bgClass="bg-blue-50"
         borderClass="border-blue-200"
         subtitle="Tarjetas acreditadas"
+        tooltip="Suma total de todos los pagos con tarjeta acreditados en Nave Point (Visa, Mastercard, MercadoPago). No incluye devoluciones ni efectivo."
       />
       <Card
         title="Total Maxirest Tarjetas"
@@ -58,6 +77,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         bgClass="bg-indigo-50"
         borderClass="border-indigo-200"
         subtitle="Cobros electrónicos"
+        tooltip="Suma total de los cobros electrónicos registrados en Maxirest (Visa, Mastercard, MercadoPago). No incluye efectivo."
       />
       <Card
         title="Efectivo Maxirest"
@@ -67,6 +87,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         bgClass="bg-gray-50"
         borderClass="border-gray-200"
         subtitle="Pagos en efectivo"
+        tooltip="Total de cobros en efectivo registrados en Maxirest. El efectivo no aparece en Nave Point, por eso se muestra por separado como referencia."
       />
       <Card
         title="Diferencia Total"
@@ -80,6 +101,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         bgClass={isDiferenciaZero ? 'bg-green-50' : 'bg-red-50'}
         borderClass={isDiferenciaZero ? 'border-green-200' : 'border-red-200'}
         subtitle={isDiferenciaZero ? 'Sin diferencias' : 'Nave Point − Maxirest'}
+        tooltip="Diferencia entre el total de tarjetas de Nave Point y el total de tarjetas de Maxirest. Idealmente debe ser $0. Un valor negativo indica que Maxirest registró más de lo que acreditó Nave Point."
       />
       <Card
         title="% Conciliado"
@@ -93,6 +115,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         bgClass={is100Conciliado ? 'bg-green-50' : 'bg-yellow-50'}
         borderClass={is100Conciliado ? 'border-green-200' : 'border-yellow-200'}
         subtitle={is100Conciliado ? 'Conciliación perfecta' : 'Filas de tarjetas'}
+        tooltip="Porcentaje de filas de tarjeta donde ambos sistemas coinciden (diferencia ≤ $1). El 100% significa que todos los medios de pago cuadran perfectamente."
       />
     </div>
   );
