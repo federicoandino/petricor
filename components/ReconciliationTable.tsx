@@ -113,8 +113,11 @@ export function ReconciliationTable({ rows }: ReconciliationTableProps) {
               <td className="px-4 py-3 text-gray-700 whitespace-nowrap font-mono text-xs">
                 {formatDate(row.date)}
               </td>
-              <td className="px-4 py-3 text-gray-800 font-medium whitespace-nowrap">
-                {row.medioPago}
+              <td className="px-4 py-3 whitespace-nowrap">
+                <span className="text-gray-800 font-medium">{row.medioPago}</span>
+                {row.npBreakdown && (
+                  <span className="block text-[10px] text-gray-400 font-normal mt-0.5">{row.npBreakdown}</span>
+                )}
               </td>
               <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap tabular-nums">
                 {row.totalNavePoint !== null ? formatARS(row.totalNavePoint) : <span className="text-gray-300">—</span>}

@@ -8,6 +8,8 @@ export interface ReconciliationRow {
   totalMaxirest: number | null;
   diferencia: number | null;
   status: 'conciliado' | 'descuadre' | 'soloNavePoint' | 'soloMaxirest' | 'efectivo';
+  // When multiple NP types aggregated into one MX bucket, list them here
+  npBreakdown?: string;
 }
 
 export interface Summary {
@@ -23,40 +25,31 @@ export interface ReconciliationResult {
   summary: Summary;
 }
 
-// Mapping from Nave Point payment name → Maxirest COBRO value
+// All Nave Point card types → their Maxirest COBRO equivalent.
+// Maxirest may lump multiple card types under a single COBRO (e.g. "VISA DEBITO"
+// for all cards). When that happens, this mapping sends them all to the same bucket
+// and they get aggregated before comparison.
 const NAVEPOINT_TO_MAXIREST: Record<string, string> = {
   'Visa Débito': 'VISA DEBITO',
-  'Visa Crédito': 'VISA CREDITO',
-  'Mastercard Débito': 'MASTER DEBITO',
-  'Mastercard Crédito': 'MASTER CREDITO',
+  'Visa Crédito': 'VISA DEBITO',
+  'Mastercard Débito': 'VISA DEBITO',
+  'Mastercard Crédito': 'VISA DEBITO',
   'Dinero en cuenta': 'MERCADOPAGO',
 };
 
-// Display name for Maxirest-only tarjeta entries
-const MAXIREST_DISPLAY: Record<string, string> = {
-  'VISA DEBITO': 'Visa Débito',
-  'VISA CREDITO': 'Visa Crédito',
-  'MASTER DEBITO': 'Mastercard Débito',
-  'MASTER CREDITO': 'Mastercard Crédito',
-  'MERCADOPAGO': 'Dinero en cuenta',
+// Human-readable label for each Maxirest COBRO bucket
+const MAXIREST_BUCKET_LABEL: Record<string, string> = {
+  'VISA DEBITO': 'Total Tarjetas',
+  'MERCADOPAGO': 'MercadoPago',
 };
+
+// COBRO values in Maxirest that are NOT payment methods (credit notes, invoices, etc.)
+// and should be ignored in reconciliation
+const MAXIREST_IGNORED_COBROS = /^(NCB|FCB|NDB|FDB)\s/i;
 
 const TOLERANCE = 1;
 
-function groupByKey<T>(
-  items: T[],
-  keyFn: (item: T) => string
-): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(item);
-  }
-  return map;
-}
-
-function sumField<T>(items: T[], field: keyof T): number {
+function sumBy<T>(items: T[], field: keyof T): number {
   return items.reduce((acc, item) => acc + (item[field] as number), 0);
 }
 
@@ -64,88 +57,105 @@ export function reconcile(
   navePointData: NavePointRow[],
   maxirestData: MaxirestRow[]
 ): ReconciliationResult {
-  // Determine the intersection of dates present in both files
+  // Intersect dates so only common dates are compared
   const npDates = new Set(navePointData.map((r) => r.date));
   const mxDates = new Set(maxirestData.map((r) => r.date));
   const commonDates = new Set([...npDates].filter((d) => mxDates.has(d)));
 
-  // Only keep rows whose date appears in both files
   const filteredNP = navePointData.filter((r) => commonDates.has(r.date));
   const filteredMX = maxirestData.filter((r) => commonDates.has(r.date));
 
-  // Group NavePoint by date + medioPago
-  const npGrouped = groupByKey(
-    filteredNP,
-    (r) => `${r.date}|${r.medioPago}`
-  );
+  // --- Aggregate NavePoint by (date, mappedMxCobro) ---
+  // Multiple NP medioPago types may map to the same MX cobro bucket.
+  // We sum them all so the comparison is apples-to-apples.
+  const npAgg = new Map<string, { total: number; labels: string[] }>();
+  const npUnmapped: Array<{ date: string; medioPago: string; total: number }> = [];
 
-  // Group Maxirest by date + cobro
-  const mxGrouped = groupByKey(
-    filteredMX,
-    (r) => `${r.date}|${r.cobro}`
-  );
+  for (const row of filteredNP) {
+    const mxCobro = NAVEPOINT_TO_MAXIREST[row.medioPago];
+    if (!mxCobro) {
+      npUnmapped.push({ date: row.date, medioPago: row.medioPago, total: row.monto });
+      continue;
+    }
+    const key = `${row.date}|${mxCobro}`;
+    const existing = npAgg.get(key) ?? { total: 0, labels: [] };
+    existing.total += row.monto;
+    if (!existing.labels.includes(row.medioPago)) existing.labels.push(row.medioPago);
+    npAgg.set(key, existing);
+  }
+
+  // --- Aggregate Maxirest by (date, cobro), skip ignored COBRO types ---
+  const mxAgg = new Map<string, number>();
+
+  for (const row of filteredMX) {
+    const cobro = row.cobro.trim();
+    if (MAXIREST_IGNORED_COBROS.test(cobro)) continue; // skip credit notes / invoices
+    const key = `${row.date}|${cobro}`;
+    mxAgg.set(key, (mxAgg.get(key) ?? 0) + row.importe);
+  }
 
   const rows: ReconciliationRow[] = [];
   const processedMxKeys = new Set<string>();
 
-  // Process all NavePoint entries
-  for (const [npKey, npRows] of npGrouped.entries()) {
-    const [date, medioPago] = npKey.split('|');
-    const totalNP = sumField(npRows, 'monto');
+  // --- Match NP aggregated buckets against MX ---
+  for (const [key, { total: totalNP, labels }] of npAgg.entries()) {
+    const [date, mxCobro] = key.split('|');
+    processedMxKeys.add(key);
 
-    const mxCobro = NAVEPOINT_TO_MAXIREST[medioPago];
+    const totalMX = mxAgg.get(key);
+    const displayName = MAXIREST_BUCKET_LABEL[mxCobro] ?? mxCobro;
+    const breakdown = labels.length > 1 ? labels.join(' + ') : undefined;
 
-    if (!mxCobro) {
-      // No mapping — record as soloNavePoint
+    if (totalMX === undefined) {
       rows.push({
         date,
-        medioPago,
-        totalNavePoint: totalNP,
-        totalMaxirest: null,
-        diferencia: null,
-        status: 'soloNavePoint',
-      });
-      continue;
-    }
-
-    const mxKey = `${date}|${mxCobro}`;
-    processedMxKeys.add(mxKey);
-
-    const mxRows = mxGrouped.get(mxKey);
-    if (!mxRows) {
-      // In NavePoint but not Maxirest
-      rows.push({
-        date,
-        medioPago,
+        medioPago: displayName,
         totalNavePoint: totalNP,
         totalMaxirest: null,
         diferencia: totalNP,
         status: 'soloNavePoint',
+        npBreakdown: breakdown,
       });
     } else {
-      const totalMX = sumField(mxRows, 'importe');
       const diferencia = totalNP - totalMX;
-      const status =
-        Math.abs(diferencia) <= TOLERANCE ? 'conciliado' : 'descuadre';
-
       rows.push({
         date,
-        medioPago,
+        medioPago: displayName,
         totalNavePoint: totalNP,
         totalMaxirest: totalMX,
         diferencia,
-        status,
+        status: Math.abs(diferencia) <= TOLERANCE ? 'conciliado' : 'descuadre',
+        npBreakdown: breakdown,
       });
     }
   }
 
-  // Process Maxirest entries not yet covered
-  for (const [mxKey, mxRows] of mxGrouped.entries()) {
-    const [date, cobro] = mxKey.split('|');
-    const totalMX = sumField(mxRows, 'importe');
+  // --- Unmapped NP entries (no known MX equivalent) ---
+  const unmappedByKey = new Map<string, { total: number }>();
+  for (const { date, medioPago, total } of npUnmapped) {
+    const key = `${date}|${medioPago}`;
+    const existing = unmappedByKey.get(key) ?? { total: 0 };
+    existing.total += total;
+    unmappedByKey.set(key, existing);
+  }
+  for (const [key, { total }] of unmappedByKey.entries()) {
+    const [date, medioPago] = key.split('|');
+    rows.push({
+      date,
+      medioPago,
+      totalNavePoint: total,
+      totalMaxirest: null,
+      diferencia: total,
+      status: 'soloNavePoint',
+    });
+  }
+
+  // --- MX entries not covered by any NP bucket ---
+  for (const [key, totalMX] of mxAgg.entries()) {
+    if (processedMxKeys.has(key)) continue;
+    const [date, cobro] = key.split('|');
 
     if (cobro.toUpperCase() === 'EFECTIVO') {
-      // Efectivo — always its own row
       rows.push({
         date,
         medioPago: 'Efectivo',
@@ -157,10 +167,7 @@ export function reconcile(
       continue;
     }
 
-    if (processedMxKeys.has(mxKey)) continue;
-
-    // Tarjeta in Maxirest not in NavePoint
-    const displayName = MAXIREST_DISPLAY[cobro] ?? cobro;
+    const displayName = MAXIREST_BUCKET_LABEL[cobro] ?? cobro;
     rows.push({
       date,
       medioPago: displayName,
@@ -171,30 +178,21 @@ export function reconcile(
     });
   }
 
-  // Sort: by date asc, then by medioPago
+  // Sort by date asc, then medioPago
   rows.sort((a, b) => {
     if (a.date < b.date) return -1;
     if (a.date > b.date) return 1;
     return a.medioPago.localeCompare(b.medioPago, 'es');
   });
 
-  // Compute summary
+  // Summary
   const cardRows = rows.filter((r) => r.status !== 'efectivo');
-  const effectivoRows = rows.filter((r) => r.status === 'efectivo');
+  const efectivoRows = rows.filter((r) => r.status === 'efectivo');
   const conciliadoCount = cardRows.filter((r) => r.status === 'conciliado').length;
 
-  const totalNavePoint = cardRows.reduce(
-    (acc, r) => acc + (r.totalNavePoint ?? 0),
-    0
-  );
-  const totalMaxirestTarjetas = cardRows.reduce(
-    (acc, r) => acc + (r.totalMaxirest ?? 0),
-    0
-  );
-  const totalEfectivo = effectivoRows.reduce(
-    (acc, r) => acc + (r.totalMaxirest ?? 0),
-    0
-  );
+  const totalNavePoint = cardRows.reduce((acc, r) => acc + (r.totalNavePoint ?? 0), 0);
+  const totalMaxirestTarjetas = cardRows.reduce((acc, r) => acc + (r.totalMaxirest ?? 0), 0);
+  const totalEfectivo = efectivoRows.reduce((acc, r) => acc + (r.totalMaxirest ?? 0), 0);
   const diferenciaTotal = totalNavePoint - totalMaxirestTarjetas;
   const porcentajeConciliado =
     cardRows.length === 0 ? 100 : (conciliadoCount / cardRows.length) * 100;
