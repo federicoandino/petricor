@@ -64,15 +64,24 @@ export function reconcile(
   navePointData: NavePointRow[],
   maxirestData: MaxirestRow[]
 ): ReconciliationResult {
+  // Determine the intersection of dates present in both files
+  const npDates = new Set(navePointData.map((r) => r.date));
+  const mxDates = new Set(maxirestData.map((r) => r.date));
+  const commonDates = new Set([...npDates].filter((d) => mxDates.has(d)));
+
+  // Only keep rows whose date appears in both files
+  const filteredNP = navePointData.filter((r) => commonDates.has(r.date));
+  const filteredMX = maxirestData.filter((r) => commonDates.has(r.date));
+
   // Group NavePoint by date + medioPago
   const npGrouped = groupByKey(
-    navePointData,
+    filteredNP,
     (r) => `${r.date}|${r.medioPago}`
   );
 
   // Group Maxirest by date + cobro
   const mxGrouped = groupByKey(
-    maxirestData,
+    filteredMX,
     (r) => `${r.date}|${r.cobro}`
   );
 
