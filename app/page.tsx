@@ -6,6 +6,7 @@ import { FileDropZone, type FileMeta } from '@/components/FileDropZone';
 import { SummaryCards } from '@/components/SummaryCards';
 import { ReconciliationTable } from '@/components/ReconciliationTable';
 import { ErrorsSection } from '@/components/ErrorsSection';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { parseNavePoint, type NavePointRow } from '@/lib/parseNavePoint';
 import { parseMaxirest, type MaxirestRow } from '@/lib/parseMaxirest';
 import { reconcile, type ReconciliationResult } from '@/lib/reconcile';
@@ -22,19 +23,45 @@ export default function HomePage() {
   const [isReconciling, setIsReconciling] = useState(false);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
+  // Date filter state — derived from intersection of both files
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+
+  const computeAvailableDates = useCallback((np: NavePointRow[], mx: MaxirestRow[]) => {
+    const npDates = new Set(np.map((r) => r.date));
+    const mxDates = new Set(mx.map((r) => r.date));
+    const common = [...npDates].filter((d) => mxDates.has(d)).sort();
+    setAvailableDates(common);
+    if (common.length > 0) {
+      setDateFrom(common[0]);
+      setDateTo(common[common.length - 1]);
+    }
+  }, []);
+
   const handleNavePointLoaded = useCallback((data: unknown[], meta: FileMeta) => {
-    setNavePointData(data as NavePointRow[]);
+    const np = data as NavePointRow[];
+    setNavePointData(np);
     setNavePointMeta(meta);
     setResult(null);
     setReconcileError(null);
-  }, []);
+    setMaxirestData((mx) => {
+      if (mx) computeAvailableDates(np, mx);
+      return mx;
+    });
+  }, [computeAvailableDates]);
 
   const handleMaxirestLoaded = useCallback((data: unknown[], meta: FileMeta) => {
-    setMaxirestData(data as MaxirestRow[]);
+    const mx = data as MaxirestRow[];
+    setMaxirestData(mx);
     setMaxirestMeta(meta);
     setResult(null);
     setReconcileError(null);
-  }, []);
+    setNavePointData((np) => {
+      if (np) computeAvailableDates(np, mx);
+      return np;
+    });
+  }, [computeAvailableDates]);
 
   const parseNavePointWrapper = useCallback(
     (buffer: ArrayBuffer) => {
@@ -57,11 +84,18 @@ export default function HomePage() {
     setIsReconciling(true);
     setReconcileError(null);
 
-    // Allow React to re-render before heavy computation
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     try {
-      const reconcileResult = reconcile(navePointData, maxirestData);
+      // Filter both datasets to the selected date range before reconciling
+      const filteredNP = dateFrom && dateTo
+        ? navePointData.filter((r) => r.date >= dateFrom && r.date <= dateTo)
+        : navePointData;
+      const filteredMX = dateFrom && dateTo
+        ? maxirestData.filter((r) => r.date >= dateFrom && r.date <= dateTo)
+        : maxirestData;
+
+      const reconcileResult = reconcile(filteredNP, filteredMX);
       setResult(reconcileResult);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido al conciliar.';
@@ -69,7 +103,7 @@ export default function HomePage() {
     } finally {
       setIsReconciling(false);
     }
-  }, [navePointData, maxirestData]);
+  }, [navePointData, maxirestData, dateFrom, dateTo]);
 
   const handleExport = useCallback(() => {
     if (!result) return;
@@ -84,6 +118,9 @@ export default function HomePage() {
     setMaxirestMeta(null);
     setResult(null);
     setReconcileError(null);
+    setAvailableDates([]);
+    setDateFrom('');
+    setDateTo('');
   }, []);
 
   const bothLoaded = !!navePointData && !!maxirestData;
@@ -152,6 +189,22 @@ export default function HomePage() {
               parseFile={parseMaxirestWrapper}
             />
           </div>
+
+          {/* Date range filter — shown once both files are loaded */}
+          {bothLoaded && availableDates.length > 0 && (
+            <div className="mt-4">
+              <DateRangePicker
+                availableDates={availableDates}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                  setResult(null);
+                }}
+              />
+            </div>
+          )}
 
           {/* Reconcile button */}
           <div className="mt-5 flex flex-col items-center gap-3">
