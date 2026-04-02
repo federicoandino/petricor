@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 export interface MaxirestRow {
   date: string;
+  time: string;   // "HH:MM"
   cobro: string;
   importe: number;
 }
@@ -100,6 +101,9 @@ export function parseMaxirest(buffer: ArrayBuffer): MaxirestResult {
   const fechaIdx = headerRow.findIndex(
     (h) => typeof h === 'string' && h.trim().toUpperCase() === 'FECHA'
   );
+  const horaIdx = headerRow.findIndex(
+    (h) => typeof h === 'string' && h.trim().toUpperCase() === 'HORA'
+  );
   const cobroIdx = headerRow.findIndex(
     (h) => typeof h === 'string' && h.trim().toUpperCase() === 'COBRO'
   );
@@ -150,7 +154,18 @@ export function parseMaxirest(buffer: ArrayBuffer): MaxirestResult {
       importe = parsed;
     }
 
-    result.push({ date: dateStr, cobro, importe });
+    // Parse HORA: comes as a JS Date object (time-only serial from Excel)
+    const rawHora = row[horaIdx];
+    let time = '';
+    if (rawHora instanceof Date && !isNaN(rawHora.getTime())) {
+      const h = String(rawHora.getUTCHours()).padStart(2, '0');
+      const m = String(rawHora.getUTCMinutes()).padStart(2, '0');
+      time = `${h}:${m}`;
+    } else if (typeof rawHora === 'string' && rawHora.trim().match(/^\d{1,2}:\d{2}/)) {
+      time = rawHora.trim().substring(0, 5);
+    }
+
+    result.push({ date: dateStr, time, cobro, importe });
   }
 
   if (result.length === 0) {

@@ -8,8 +8,8 @@ export interface ReconciliationRow {
   totalMaxirest: number | null;
   diferencia: number | null;
   status: 'conciliado' | 'descuadre' | 'soloNavePoint' | 'soloMaxirest' | 'efectivo';
-  // Individual NP transactions — populated for descuadre and soloNavePoint rows
   npTransactions?: Array<{ time: string; medioPago: string; monto: number }>;
+  mxTransactions?: Array<{ time: string; cobro: string; importe: number }>;
 }
 
 export interface Summary {
@@ -54,9 +54,8 @@ export function reconcile(
   }
 
   // --- Aggregate Maxirest: split into cards vs efectivo per date ---
-  // Cards = everything except EFECTIVO and ignored accounting entries.
-  // Maxirest may label all cards as "VISA DEBITO" regardless of actual card type.
-  const mxCardsByDate = new Map<string, number>();
+  type MxAggEntry = { total: number; transactions: Array<{ time: string; cobro: string; importe: number }> };
+  const mxCardsByDate = new Map<string, MxAggEntry>();
   const mxEfectivoByDate = new Map<string, number>();
 
   for (const row of filteredMX) {
@@ -66,7 +65,10 @@ export function reconcile(
     if (cobro.toUpperCase() === 'EFECTIVO') {
       mxEfectivoByDate.set(row.date, (mxEfectivoByDate.get(row.date) ?? 0) + row.importe);
     } else {
-      mxCardsByDate.set(row.date, (mxCardsByDate.get(row.date) ?? 0) + row.importe);
+      const existing = mxCardsByDate.get(row.date) ?? { total: 0, transactions: [] };
+      existing.total += row.importe;
+      existing.transactions.push({ time: row.time, cobro, importe: row.importe });
+      mxCardsByDate.set(row.date, existing);
     }
   }
 
@@ -77,14 +79,15 @@ export function reconcile(
 
   for (const date of allDates) {
     const np = npByDate.get(date);
-    const mxCards = mxCardsByDate.get(date);
+    const mxEntry = mxCardsByDate.get(date);
     const mxEfectivo = mxEfectivoByDate.get(date);
 
     // Card reconciliation row
-    if (np !== undefined || mxCards !== undefined) {
+    if (np !== undefined || mxEntry !== undefined) {
       const totalNP = np?.total ?? null;
-      const totalMX = mxCards ?? null;
-      const sorted = np ? [...np.transactions].sort((a, b) => a.time.localeCompare(b.time)) : undefined;
+      const totalMX = mxEntry?.total ?? null;
+      const sortedNP = np ? [...np.transactions].sort((a, b) => a.time.localeCompare(b.time)) : undefined;
+      const sortedMX = mxEntry ? [...mxEntry.transactions].sort((a, b) => a.time.localeCompare(b.time)) : undefined;
 
       if (totalNP !== null && totalMX !== null) {
         const diferencia = totalNP - totalMX;
@@ -92,18 +95,21 @@ export function reconcile(
         rows.push({
           date, medioPago: 'Total Tarjetas', totalNavePoint: totalNP, totalMaxirest: totalMX,
           diferencia, status,
-          npTransactions: status !== 'conciliado' ? sorted : undefined,
+          npTransactions: status !== 'conciliado' ? sortedNP : undefined,
+          mxTransactions: status !== 'conciliado' ? sortedMX : undefined,
         });
       } else if (totalNP !== null) {
         rows.push({
           date, medioPago: 'Total Tarjetas', totalNavePoint: totalNP, totalMaxirest: null,
           diferencia: totalNP, status: 'soloNavePoint',
-          npTransactions: sorted,
+          npTransactions: sortedNP,
+          mxTransactions: undefined,
         });
       } else {
         rows.push({
           date, medioPago: 'Total Tarjetas', totalNavePoint: null, totalMaxirest: totalMX,
           diferencia: -(totalMX!), status: 'soloMaxirest',
+          mxTransactions: sortedMX,
         });
       }
     }
