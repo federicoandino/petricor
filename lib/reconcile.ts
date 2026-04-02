@@ -8,8 +8,9 @@ export interface ReconciliationRow {
   totalMaxirest: number | null;
   diferencia: number | null;
   status: 'conciliado' | 'descuadre' | 'soloNavePoint' | 'soloMaxirest' | 'efectivo';
-  // When multiple NP types aggregated into one MX bucket, list them here
   npBreakdown?: string;
+  // Individual NP transactions — populated for descuadre and soloNavePoint rows
+  npTransactions?: Array<{ time: string; medioPago: string; monto: number }>;
 }
 
 export interface Summary {
@@ -66,21 +67,25 @@ export function reconcile(
   const filteredMX = maxirestData.filter((r) => commonDates.has(r.date));
 
   // --- Aggregate NavePoint by (date, mappedMxCobro) ---
-  // Multiple NP medioPago types may map to the same MX cobro bucket.
-  // We sum them all so the comparison is apples-to-apples.
-  const npAgg = new Map<string, { total: number; labels: string[] }>();
-  const npUnmapped: Array<{ date: string; medioPago: string; total: number }> = [];
+  type NpAggEntry = {
+    total: number;
+    labels: string[];
+    transactions: Array<{ time: string; medioPago: string; monto: number }>;
+  };
+  const npAgg = new Map<string, NpAggEntry>();
+  const npUnmapped: Array<{ date: string; medioPago: string; total: number; transactions: Array<{ time: string; medioPago: string; monto: number }> }> = [];
 
   for (const row of filteredNP) {
     const mxCobro = NAVEPOINT_TO_MAXIREST[row.medioPago];
     if (!mxCobro) {
-      npUnmapped.push({ date: row.date, medioPago: row.medioPago, total: row.monto });
+      npUnmapped.push({ date: row.date, medioPago: row.medioPago, total: row.monto, transactions: [{ time: row.time, medioPago: row.medioPago, monto: row.monto }] });
       continue;
     }
     const key = `${row.date}|${mxCobro}`;
-    const existing = npAgg.get(key) ?? { total: 0, labels: [] };
+    const existing = npAgg.get(key) ?? { total: 0, labels: [], transactions: [] };
     existing.total += row.monto;
     if (!existing.labels.includes(row.medioPago)) existing.labels.push(row.medioPago);
+    existing.transactions.push({ time: row.time, medioPago: row.medioPago, monto: row.monto });
     npAgg.set(key, existing);
   }
 
@@ -98,55 +103,47 @@ export function reconcile(
   const processedMxKeys = new Set<string>();
 
   // --- Match NP aggregated buckets against MX ---
-  for (const [key, { total: totalNP, labels }] of npAgg.entries()) {
+  for (const [key, { total: totalNP, labels, transactions }] of npAgg.entries()) {
     const [date, mxCobro] = key.split('|');
     processedMxKeys.add(key);
 
     const totalMX = mxAgg.get(key);
     const displayName = MAXIREST_BUCKET_LABEL[mxCobro] ?? mxCobro;
     const breakdown = labels.length > 1 ? labels.join(' + ') : undefined;
+    const sorted = [...transactions].sort((a, b) => a.time.localeCompare(b.time));
 
     if (totalMX === undefined) {
       rows.push({
-        date,
-        medioPago: displayName,
-        totalNavePoint: totalNP,
-        totalMaxirest: null,
-        diferencia: totalNP,
-        status: 'soloNavePoint',
-        npBreakdown: breakdown,
+        date, medioPago: displayName, totalNavePoint: totalNP, totalMaxirest: null,
+        diferencia: totalNP, status: 'soloNavePoint', npBreakdown: breakdown,
+        npTransactions: sorted,
       });
     } else {
       const diferencia = totalNP - totalMX;
+      const status = Math.abs(diferencia) <= TOLERANCE ? 'conciliado' : 'descuadre';
       rows.push({
-        date,
-        medioPago: displayName,
-        totalNavePoint: totalNP,
-        totalMaxirest: totalMX,
-        diferencia,
-        status: Math.abs(diferencia) <= TOLERANCE ? 'conciliado' : 'descuadre',
-        npBreakdown: breakdown,
+        date, medioPago: displayName, totalNavePoint: totalNP, totalMaxirest: totalMX,
+        diferencia, status, npBreakdown: breakdown,
+        npTransactions: status !== 'conciliado' ? sorted : undefined,
       });
     }
   }
 
   // --- Unmapped NP entries (no known MX equivalent) ---
-  const unmappedByKey = new Map<string, { total: number }>();
-  for (const { date, medioPago, total } of npUnmapped) {
+  const unmappedByKey = new Map<string, { total: number; transactions: Array<{ time: string; medioPago: string; monto: number }> }>();
+  for (const { date, medioPago, total, transactions } of npUnmapped) {
     const key = `${date}|${medioPago}`;
-    const existing = unmappedByKey.get(key) ?? { total: 0 };
+    const existing = unmappedByKey.get(key) ?? { total: 0, transactions: [] };
     existing.total += total;
+    existing.transactions.push(...transactions);
     unmappedByKey.set(key, existing);
   }
-  for (const [key, { total }] of unmappedByKey.entries()) {
+  for (const [key, { total, transactions }] of unmappedByKey.entries()) {
     const [date, medioPago] = key.split('|');
     rows.push({
-      date,
-      medioPago,
-      totalNavePoint: total,
-      totalMaxirest: null,
-      diferencia: total,
-      status: 'soloNavePoint',
+      date, medioPago, totalNavePoint: total, totalMaxirest: null,
+      diferencia: total, status: 'soloNavePoint',
+      npTransactions: [...transactions].sort((a, b) => a.time.localeCompare(b.time)),
     });
   }
 

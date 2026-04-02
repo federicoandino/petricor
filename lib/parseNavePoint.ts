@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 export interface NavePointRow {
   date: string;
+  time: string;       // "HH:MM"
   medioPago: string;
   monto: number;
 }
@@ -17,16 +18,21 @@ export interface NavePointResult {
 }
 
 /**
- * Parses "DD/MM/YYYY HH:MM" string into "YYYY-MM-DD"
+ * Parses "DD/MM/YYYY HH:MM" string into { date: "YYYY-MM-DD", time: "HH:MM" }
  */
-function parseDateString(raw: string): string | null {
+function parseDateString(raw: string): { date: string; time: string } | null {
   if (!raw || typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  // Expected format: DD/MM/YYYY HH:MM or DD/MM/YYYY HH:MM:SS
-  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!match) return null;
-  const [, day, month, year] = match;
-  return `${year}-${month}-${day}`;
+  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+  if (!match) {
+    // Try without time
+    const dateOnly = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!dateOnly) return null;
+    const [, day, month, year] = dateOnly;
+    return { date: `${year}-${month}-${day}`, time: '' };
+  }
+  const [, day, month, year, time] = match;
+  return { date: `${year}-${month}-${day}`, time };
 }
 
 export function parseNavePoint(buffer: ArrayBuffer): NavePointResult {
@@ -77,8 +83,9 @@ export function parseNavePoint(buffer: ArrayBuffer): NavePointResult {
     if (estado !== 'Acreditado') continue;
 
     const rawFecha = row[fechaIdx];
-    const dateStr = parseDateString(String(rawFecha ?? ''));
-    if (!dateStr) continue;
+    const parsed = parseDateString(String(rawFecha ?? ''));
+    if (!parsed) continue;
+    const { date: dateStr, time } = parsed;
 
     const rawMedio = row[medioIdx];
     const medioPago = typeof rawMedio === 'string' ? rawMedio.trim() : String(rawMedio ?? '').trim();
@@ -88,7 +95,7 @@ export function parseNavePoint(buffer: ArrayBuffer): NavePointResult {
     const monto = typeof rawMonto === 'number' ? rawMonto : parseFloat(String(rawMonto ?? '0').replace(',', '.'));
     if (isNaN(monto)) continue;
 
-    result.push({ date: dateStr, medioPago, monto });
+    result.push({ date: dateStr, time, medioPago, monto });
   }
 
   if (result.length === 0) {
