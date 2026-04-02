@@ -17,7 +17,8 @@ export interface Summary {
   totalMaxirestTarjetas: number;
   totalEfectivo: number;
   diferenciaTotal: number;
-  porcentajeConciliado: number; // % of NP transactions that matched (including surcharge matches)
+  porcentajeConciliado: number;
+  creditWithoutSurcharge: number; // credit card txs matched at exact amount — mozo may have forgotten the 10%
 }
 
 export interface ReconciliationResult {
@@ -70,6 +71,7 @@ export function reconcile(
   const rows: ReconciliationRow[] = [];
   let totalMatchedTx = 0;
   let totalNPTx = 0;
+  let totalCreditWithoutSurcharge = 0;
 
   const allDates = new Set([...npByDate.keys(), ...mxCardsByDate.keys(), ...mxEfectivoByDate.keys()]);
 
@@ -91,6 +93,7 @@ export function reconcile(
 
         totalMatchedTx += result.totalMatched;
         totalNPTx += result.totalNP;
+        totalCreditWithoutSurcharge += result.exactCreditMatches.length;
 
         const isFullyMatched = result.unmatchedNP.length === 0 && result.unmatchedMX.length === 0;
         const diferencia = totalNP - totalMX;
@@ -149,6 +152,6 @@ export function reconcile(
 
   return {
     rows,
-    summary: { totalNavePoint, totalMaxirestTarjetas, totalEfectivo, diferenciaTotal, porcentajeConciliado },
+    summary: { totalNavePoint, totalMaxirestTarjetas, totalEfectivo, diferenciaTotal, porcentajeConciliado, creditWithoutSurcharge: totalCreditWithoutSurcharge },
   };
 }

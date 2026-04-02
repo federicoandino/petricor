@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TrendingUp, CreditCard, Banknote, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { TrendingUp, CreditCard, Banknote, AlertTriangle, CheckCircle2, Info, ReceiptText } from 'lucide-react';
 import type { Summary } from '@/lib/reconcile';
 import { formatARS } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -114,8 +114,18 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         colorClass={is100Conciliado ? 'text-green-700' : 'text-yellow-700'}
         bgClass={is100Conciliado ? 'bg-green-50' : 'bg-yellow-50'}
         borderClass={is100Conciliado ? 'border-green-200' : 'border-yellow-200'}
-        subtitle={is100Conciliado ? 'Conciliación perfecta' : 'Filas de tarjetas'}
-        tooltip="Porcentaje de filas de tarjeta donde ambos sistemas coinciden (diferencia ≤ $1). El 100% significa que todos los medios de pago cuadran perfectamente."
+        subtitle={is100Conciliado ? 'Conciliación perfecta' : 'Transacciones matcheadas'}
+        tooltip="Porcentaje de transacciones de Nave Point que encontraron su par en Maxirest (exactas o con recargo del 10%). El 100% significa conciliación perfecta."
+      />
+      <Card
+        title="Crédito sin recargo"
+        value={String(summary.creditWithoutSurcharge)}
+        icon={<ReceiptText className="w-4 h-4 text-amber-600" />}
+        colorClass={summary.creditWithoutSurcharge === 0 ? 'text-green-700' : 'text-amber-700'}
+        bgClass={summary.creditWithoutSurcharge === 0 ? 'bg-green-50' : 'bg-amber-50'}
+        borderClass={summary.creditWithoutSurcharge === 0 ? 'border-green-200' : 'border-amber-300'}
+        subtitle={summary.creditWithoutSurcharge === 0 ? 'Sin alertas' : 'Posible recargo no cobrado'}
+        tooltip="Cantidad de transacciones de tarjeta de crédito que coincidieron por monto exacto con Maxirest (sin diferencia del 10%). Puede indicar mesas donde el mozo no aplicó el recargo."
       />
     </div>
   );

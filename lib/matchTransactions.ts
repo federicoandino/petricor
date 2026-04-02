@@ -22,6 +22,9 @@ export interface MatchResult {
   unmatchedMX: TxMX[];
   totalMatched: number;
   totalNP: number;
+  // Credit card transactions matched at exact amount (no surcharge applied).
+  // These may indicate the mozo forgot to charge the 10% surcharge.
+  exactCreditMatches: MatchedPair[];
 }
 
 const AMOUNT_TOLERANCE = 1;   // ±$1 for exact match
@@ -88,12 +91,17 @@ export function matchTransactions(npList: TxNP[], mxList: TxMX[]): MatchResult {
     availableMX.splice(best.idx, 1);
   }
 
+  const exactCreditMatches = matched.filter(
+    (p) => !p.withSurcharge && isCreditCard(p.np.medioPago)
+  );
+
   return {
     matched,
     unmatchedNP,
     unmatchedMX: availableMX,
     totalMatched: matched.length,
     totalNP: npList.length,
+    exactCreditMatches,
   };
 }
 
