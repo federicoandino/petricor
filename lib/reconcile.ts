@@ -18,7 +18,8 @@ export interface Summary {
   totalEfectivo: number;
   diferenciaTotal: number;
   porcentajeConciliado: number;
-  creditWithoutSurcharge: number; // credit card txs matched at exact amount — mozo may have forgotten the 10%
+  creditWithoutSurcharge: number;
+  creditWithoutSurchargeByMozo: Array<{ mozo: string; count: number; totalMX: number }>;
 }
 
 export interface ReconciliationResult {
@@ -72,6 +73,7 @@ export function reconcile(
   let totalMatchedTx = 0;
   let totalNPTx = 0;
   let totalCreditWithoutSurcharge = 0;
+  const creditWithoutSurchargeByMozo = new Map<string, { count: number; totalMX: number }>();
 
   const allDates = new Set([...npByDate.keys(), ...mxCardsByDate.keys(), ...mxEfectivoByDate.keys()]);
 
@@ -88,12 +90,19 @@ export function reconcile(
         // Run transaction-level matching (with 10% surcharge support)
         const result = matchTransactions(
           np!.transactions.map((r) => ({ time: r.time, medioPago: r.medioPago, monto: r.monto })),
-          mxEntry!.transactions.map((r) => ({ time: r.time, cobro: r.cobro, importe: r.importe }))
+          mxEntry!.transactions.map((r) => ({ time: r.time, cobro: r.cobro, importe: r.importe, mozo: r.mozo }))
         );
 
         totalMatchedTx += result.totalMatched;
         totalNPTx += result.totalNP;
         totalCreditWithoutSurcharge += result.exactCreditMatches.length;
+        for (const pair of result.exactCreditMatches) {
+          const mozo = pair.mx.mozo || 'Sin nombre';
+          const entry = creditWithoutSurchargeByMozo.get(mozo) ?? { count: 0, totalMX: 0 };
+          entry.count += 1;
+          entry.totalMX += pair.mx.importe;
+          creditWithoutSurchargeByMozo.set(mozo, entry);
+        }
 
         const isFullyMatched = result.unmatchedNP.length === 0 && result.unmatchedMX.length === 0;
         const diferencia = totalNP - totalMX;
@@ -152,6 +161,12 @@ export function reconcile(
 
   return {
     rows,
-    summary: { totalNavePoint, totalMaxirestTarjetas, totalEfectivo, diferenciaTotal, porcentajeConciliado, creditWithoutSurcharge: totalCreditWithoutSurcharge },
+    summary: {
+      totalNavePoint, totalMaxirestTarjetas, totalEfectivo, diferenciaTotal, porcentajeConciliado,
+      creditWithoutSurcharge: totalCreditWithoutSurcharge,
+      creditWithoutSurchargeByMozo: [...creditWithoutSurchargeByMozo.entries()]
+        .map(([mozo, { count, totalMX }]) => ({ mozo, count, totalMX }))
+        .sort((a, b) => b.count - a.count),
+    },
   };
 }

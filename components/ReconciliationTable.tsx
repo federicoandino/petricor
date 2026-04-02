@@ -131,6 +131,7 @@ function ExpandedDetail({ row }: { row: ReconciliationRow }) {
                       <th className="text-left px-3 py-2 whitespace-nowrap">Medio de Pago</th>
                       <th className="text-right px-3 py-2 whitespace-nowrap">Monto NP</th>
                       <th className="text-left px-3 py-2 whitespace-nowrap bg-gray-100 border-x border-gray-200">Hora MX</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap bg-gray-100">Mozo</th>
                       <th className="text-right px-3 py-2 whitespace-nowrap bg-gray-100">Monto MX</th>
                       <th className="px-3 py-2 whitespace-nowrap bg-gray-100 border-l border-gray-200 w-24">Recargo</th>
                     </tr>
@@ -141,7 +142,8 @@ function ExpandedDetail({ row }: { row: ReconciliationRow }) {
                         <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{np.time || '—'}</td>
                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{np.medioPago}</td>
                         <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap">{formatARS(np.monto)}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-gray-50 border-x border-gray-100">{mx.time || '—'}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-gray-50 border-l border-gray-100">{mx.time || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap bg-gray-50">{mx.mozo || '—'}</td>
                         <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap bg-gray-50">{formatARS(mx.importe)}</td>
                         <td className="px-3 py-2 text-center bg-gray-50 border-l border-gray-100 whitespace-nowrap">
                           {withSurcharge && (

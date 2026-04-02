@@ -53,6 +53,70 @@ function Card({ title, value, icon, colorClass, bgClass, borderClass, subtitle, 
   );
 }
 
+function SurchargeCard({ summary }: { summary: Summary }) {
+  const [open, setOpen] = useState(false);
+  const count = summary.creditWithoutSurcharge;
+  const byMozo = summary.creditWithoutSurchargeByMozo;
+  const isClean = count === 0;
+
+  return (
+    <div className={cn(
+      'rounded-xl border flex-1 min-w-0 overflow-hidden',
+      isClean ? 'border-green-200 bg-green-50' : 'border-amber-300 bg-amber-50'
+    )}>
+      {/* Header row */}
+      <button
+        className="w-full p-4 flex flex-col gap-2 text-left"
+        onClick={() => !isClean && setOpen((v) => !v)}
+        disabled={isClean}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide leading-tight">Crédito sin recargo</p>
+            <div className="relative" onMouseEnter={() => {}} onMouseLeave={() => {}}>
+              <Info className="w-3 h-3 text-gray-400 cursor-help flex-shrink-0" />
+            </div>
+          </div>
+          <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/60')}>
+            <ReceiptText className={cn('w-4 h-4', isClean ? 'text-green-600' : 'text-amber-600')} />
+          </div>
+        </div>
+        <p className={cn('text-xl font-bold leading-none', isClean ? 'text-green-700' : 'text-amber-700')}>{count}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">{isClean ? 'Sin alertas' : 'Posible recargo no cobrado'}</p>
+          {!isClean && (
+            <span className={cn('text-xs text-amber-600 transition-transform', open && 'rotate-180')}>▾</span>
+          )}
+        </div>
+      </button>
+
+      {/* Breakdown by mozo */}
+      {!isClean && open && (
+        <div className="border-t border-amber-200 bg-white">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-amber-50 border-b border-amber-100">
+                <th className="text-left px-3 py-1.5 font-semibold text-amber-800">Mozo</th>
+                <th className="text-center px-3 py-1.5 font-semibold text-amber-800">Cobros</th>
+                <th className="text-right px-3 py-1.5 font-semibold text-amber-800">Total MX</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-50">
+              {byMozo.map(({ mozo, count: c, totalMX }) => (
+                <tr key={mozo} className="hover:bg-amber-50/60">
+                  <td className="px-3 py-1.5 font-medium text-gray-800">{mozo}</td>
+                  <td className="px-3 py-1.5 text-center text-amber-700 font-semibold">{c}</td>
+                  <td className="px-3 py-1.5 text-right text-gray-700 tabular-nums">{formatARS(totalMX)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SummaryCards({ summary }: SummaryCardsProps) {
   const isDiferenciaZero = Math.abs(summary.diferenciaTotal) < 0.01;
   const is100Conciliado = summary.porcentajeConciliado >= 99.99;
@@ -117,16 +181,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
         subtitle={is100Conciliado ? 'Conciliación perfecta' : 'Transacciones matcheadas'}
         tooltip="Porcentaje de transacciones de Nave Point que encontraron su par en Maxirest (exactas o con recargo del 10%). El 100% significa conciliación perfecta."
       />
-      <Card
-        title="Crédito sin recargo"
-        value={String(summary.creditWithoutSurcharge)}
-        icon={<ReceiptText className="w-4 h-4 text-amber-600" />}
-        colorClass={summary.creditWithoutSurcharge === 0 ? 'text-green-700' : 'text-amber-700'}
-        bgClass={summary.creditWithoutSurcharge === 0 ? 'bg-green-50' : 'bg-amber-50'}
-        borderClass={summary.creditWithoutSurcharge === 0 ? 'border-green-200' : 'border-amber-300'}
-        subtitle={summary.creditWithoutSurcharge === 0 ? 'Sin alertas' : 'Posible recargo no cobrado'}
-        tooltip="Cantidad de transacciones de tarjeta de crédito que coincidieron por monto exacto con Maxirest (sin diferencia del 10%). Puede indicar mesas donde el mozo no aplicó el recargo."
-      />
+      <SurchargeCard summary={summary} />
     </div>
   );
 }

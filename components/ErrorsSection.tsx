@@ -174,7 +174,8 @@ function DescuadreRow({ row }: { row: ReconciliationRow }) {
                           <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Hora NP</th>
                           <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Medio de Pago</th>
                           <th className="text-right px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Monto NP</th>
-                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100 border-x border-green-200">Hora MX</th>
+                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100 border-l border-green-200">Hora MX</th>
+                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100">Mozo</th>
                           <th className="text-right px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100">Monto MX</th>
                           <th className="px-3 py-2 bg-green-100 border-l border-green-200 w-24 whitespace-nowrap">Recargo</th>
                         </tr>
@@ -185,7 +186,8 @@ function DescuadreRow({ row }: { row: ReconciliationRow }) {
                             <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{np.time || '—'}</td>
                             <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{np.medioPago}</td>
                             <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap">{formatARS(np.monto)}</td>
-                            <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-green-50 border-x border-green-100">{mx.time || '—'}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-green-50 border-l border-green-100">{mx.time || '—'}</td>
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap bg-green-50">{mx.mozo || '—'}</td>
                             <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap bg-green-50">{formatARS(mx.importe)}</td>
                             <td className="px-3 py-2 text-center bg-green-50 border-l border-green-100 whitespace-nowrap">
                               {withSurcharge && (

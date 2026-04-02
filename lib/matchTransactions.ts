@@ -8,6 +8,7 @@ export interface TxMX {
   time: string;
   cobro: string;
   importe: number;
+  mozo: string;
 }
 
 export interface MatchedPair {

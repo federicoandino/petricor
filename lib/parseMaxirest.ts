@@ -5,6 +5,7 @@ export interface MaxirestRow {
   time: string;   // "HH:MM"
   cobro: string;
   importe: number;
+  mozo: string;   // waiter name, stripped of numeric prefix (e.g. "8.Guadalupe" → "Guadalupe")
 }
 
 export interface MaxirestMeta {
@@ -101,6 +102,9 @@ export function parseMaxirest(buffer: ArrayBuffer): MaxirestResult {
   const fechaIdx = headerRow.findIndex(
     (h) => typeof h === 'string' && h.trim().toUpperCase() === 'FECHA'
   );
+  const mozoIdx = headerRow.findIndex(
+    (h) => typeof h === 'string' && h.trim().toUpperCase() === 'MOZO'
+  );
   const horaIdx = headerRow.findIndex(
     (h) => typeof h === 'string' && h.trim().toUpperCase() === 'HORA'
   );
@@ -165,7 +169,12 @@ export function parseMaxirest(buffer: ArrayBuffer): MaxirestResult {
       time = rawHora.trim().substring(0, 5);
     }
 
-    result.push({ date: dateStr, time, cobro, importe });
+    const rawMozo = row[mozoIdx];
+    const mozoRaw = typeof rawMozo === 'string' ? rawMozo.trim() : String(rawMozo ?? '').trim();
+    // Strip numeric prefix: "8.Guadalupe" → "Guadalupe"
+    const mozo = mozoRaw.replace(/^\d+\./, '').trim();
+
+    result.push({ date: dateStr, time, cobro, importe, mozo });
   }
 
   if (result.length === 0) {
