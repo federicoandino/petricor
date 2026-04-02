@@ -10,6 +10,11 @@ interface ErrorsSectionProps {
   rows: ReconciliationRow[];
 }
 
+function isCredit(medioPago: string): boolean {
+  const lc = medioPago.toLowerCase();
+  return lc.includes('crédito') || lc.includes('credito') || lc.includes('internacional') || lc.includes('american express');
+}
+
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}/${m}/${y}`;
@@ -166,25 +171,28 @@ function DescuadreRow({ row }: { row: ReconciliationRow }) {
                     <table className="w-full text-xs border-collapse">
                       <thead>
                         <tr className="bg-green-50 border-b border-green-200">
-                          <th className="text-left px-3 py-2 font-semibold text-green-700">Hora NP</th>
-                          <th className="text-left px-3 py-2 font-semibold text-green-700">Medio de Pago NP</th>
-                          <th className="text-right px-3 py-2 font-semibold text-green-700">Monto NP</th>
-                          <th className="text-left px-3 py-2 font-semibold text-green-700 border-l border-green-200">Hora MX</th>
-                          <th className="text-right px-3 py-2 font-semibold text-green-700">Monto MX</th>
-                          <th className="px-3 py-2" />
+                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Hora NP</th>
+                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Medio de Pago</th>
+                          <th className="text-right px-3 py-2 font-semibold text-green-700 whitespace-nowrap">Monto NP</th>
+                          <th className="text-left px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100 border-x border-green-200">Hora MX</th>
+                          <th className="text-right px-3 py-2 font-semibold text-green-700 whitespace-nowrap bg-green-100">Monto MX</th>
+                          <th className="px-3 py-2 bg-green-100 border-l border-green-200 w-24 whitespace-nowrap">Recargo</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-green-50 bg-white">
                         {matchResult.matched.map(({ np, mx, withSurcharge }, i) => (
-                          <tr key={i} className="hover:bg-green-50/40">
-                            <td className="px-3 py-2 font-mono text-gray-600">{np.time || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700">{np.medioPago}</td>
-                            <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(np.monto)}</td>
-                            <td className="px-3 py-2 font-mono text-gray-600 border-l border-green-100">{mx.time || '—'}</td>
-                            <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(mx.importe)}</td>
-                            <td className="px-3 py-2 text-center">
+                          <tr key={i} className={cn('hover:bg-green-50/40', withSurcharge && 'bg-blue-50/30')}>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{np.time || '—'}</td>
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{np.medioPago}</td>
+                            <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap">{formatARS(np.monto)}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-green-50 border-x border-green-100">{mx.time || '—'}</td>
+                            <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap bg-green-50">{formatARS(mx.importe)}</td>
+                            <td className="px-3 py-2 text-center bg-green-50 border-l border-green-100 whitespace-nowrap">
                               {withSurcharge && (
-                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">+10%</span>
+                                <span className="inline-block text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">+10%</span>
+                              )}
+                              {!withSurcharge && isCredit(np.medioPago) && (
+                                <span className="inline-block text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">sin recargo</span>
                               )}
                             </td>
                           </tr>

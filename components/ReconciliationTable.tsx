@@ -126,29 +126,29 @@ function ExpandedDetail({ row }: { row: ReconciliationRow }) {
               <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden">
                 <table className="w-full text-xs border-collapse">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="text-left px-3 py-2 font-semibold text-gray-500">Hora NP</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-500">Medio de Pago</th>
-                      <th className="text-right px-3 py-2 font-semibold text-gray-500">Monto NP</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-500 border-l border-gray-200">Hora MX</th>
-                      <th className="text-right px-3 py-2 font-semibold text-gray-500">Monto MX</th>
-                      <th className="px-3 py-2" />
+                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Hora NP</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Medio de Pago</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Monto NP</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap bg-gray-100 border-x border-gray-200">Hora MX</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap bg-gray-100">Monto MX</th>
+                      <th className="px-3 py-2 whitespace-nowrap bg-gray-100 border-l border-gray-200 w-24">Recargo</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {mr.matched.map(({ np, mx, withSurcharge }, i) => (
-                      <tr key={i} className={cn('hover:bg-gray-50', withSurcharge && 'bg-amber-50/40')}>
-                        <td className="px-3 py-2 font-mono text-gray-600">{np.time || '—'}</td>
-                        <td className="px-3 py-2 text-gray-700">{np.medioPago}</td>
-                        <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(np.monto)}</td>
-                        <td className="px-3 py-2 font-mono text-gray-600 border-l border-gray-100">{mx.time || '—'}</td>
-                        <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(mx.importe)}</td>
-                        <td className="px-3 py-2 text-center w-16">
+                      <tr key={i} className={cn('hover:bg-gray-50', withSurcharge && 'bg-blue-50/30')}>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{np.time || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{np.medioPago}</td>
+                        <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap">{formatARS(np.monto)}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap bg-gray-50 border-x border-gray-100">{mx.time || '—'}</td>
+                        <td className="px-3 py-2 text-right text-gray-700 tabular-nums whitespace-nowrap bg-gray-50">{formatARS(mx.importe)}</td>
+                        <td className="px-3 py-2 text-center bg-gray-50 border-l border-gray-100 whitespace-nowrap">
                           {withSurcharge && (
-                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">+10%</span>
+                            <span className="inline-block text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">+10%</span>
                           )}
                           {!withSurcharge && isCreditLabel(np.medioPago) && (
-                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">sin rec.</span>
+                            <span className="inline-block text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">sin recargo</span>
                           )}
                         </td>
                       </tr>
