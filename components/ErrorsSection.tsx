@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import type { ReconciliationRow } from '@/lib/reconcile';
-import { matchTransactions } from '@/lib/matchTransactions';
 import { formatARS } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -18,16 +17,9 @@ function formatDate(dateStr: string): string {
 
 function DescuadreRow({ row }: { row: ReconciliationRow }) {
   const [expanded, setExpanded] = useState(false);
-  const hasTransactions = !!row.npTransactions?.length || !!row.mxTransactions?.length;
+  const matchResult = row.matchResult ?? null;
+  const hasTransactions = !!matchResult;
   const diff = row.diferencia ?? 0;
-
-  const matchResult = useMemo(() => {
-    if (!row.npTransactions && !row.mxTransactions) return null;
-    return matchTransactions(
-      row.npTransactions ?? [],
-      row.mxTransactions ?? []
-    );
-  }, [row.npTransactions, row.mxTransactions]);
 
   return (
     <>
@@ -179,16 +171,22 @@ function DescuadreRow({ row }: { row: ReconciliationRow }) {
                           <th className="text-right px-3 py-2 font-semibold text-green-700">Monto NP</th>
                           <th className="text-left px-3 py-2 font-semibold text-green-700 border-l border-green-200">Hora MX</th>
                           <th className="text-right px-3 py-2 font-semibold text-green-700">Monto MX</th>
+                          <th className="px-3 py-2" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-green-50 bg-white">
-                        {matchResult.matched.map(({ np, mx }, i) => (
+                        {matchResult.matched.map(({ np, mx, withSurcharge }, i) => (
                           <tr key={i} className="hover:bg-green-50/40">
                             <td className="px-3 py-2 font-mono text-gray-600">{np.time || '—'}</td>
                             <td className="px-3 py-2 text-gray-700">{np.medioPago}</td>
                             <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(np.monto)}</td>
                             <td className="px-3 py-2 font-mono text-gray-600 border-l border-green-100">{mx.time || '—'}</td>
                             <td className="px-3 py-2 text-right text-gray-700 tabular-nums">{formatARS(mx.importe)}</td>
+                            <td className="px-3 py-2 text-center">
+                              {withSurcharge && (
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">+10%</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

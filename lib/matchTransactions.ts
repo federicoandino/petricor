@@ -1,11 +1,11 @@
 export interface TxNP {
-  time: string;   // "HH:MM" local time
+  time: string;
   medioPago: string;
   monto: number;
 }
 
 export interface TxMX {
-  time: string;   // "HH:MM" (may differ from NP due to system clock offset)
+  time: string;
   cobro: string;
   importe: number;
 }
@@ -13,54 +13,88 @@ export interface TxMX {
 export interface MatchedPair {
   np: TxNP;
   mx: TxMX;
+  withSurcharge: boolean; // true = matched because NP ≈ MX × 1.10
 }
 
 export interface MatchResult {
   matched: MatchedPair[];
-  unmatchedNP: TxNP[];   // in NP but not in MX → likely missing from Maxirest
-  unmatchedMX: TxMX[];   // in MX but not in NP → extra in Maxirest
+  unmatchedNP: TxNP[];
+  unmatchedMX: TxMX[];
+  totalMatched: number;
+  totalNP: number;
 }
 
-const AMOUNT_TOLERANCE = 1; // ±$1
+const AMOUNT_TOLERANCE = 1;   // ±$1 for exact match
+const SURCHARGE_RATE = 0.10;  // 10% credit card surcharge
 
 /**
- * Greedy 1-to-1 matching of NP vs MX transactions by amount.
- * When multiple MX candidates have the same amount, pick the one
- * with the closest time to the NP transaction.
+ * Returns true if the NP payment type is a credit card
+ * (those are the ones subject to the 10% surcharge policy).
+ */
+function isCreditCard(medioPago: string): boolean {
+  const lc = medioPago.toLowerCase();
+  return (
+    lc.includes('crédito') ||
+    lc.includes('credito') ||
+    lc.includes('internacional') ||
+    lc.includes('american express') ||
+    lc.includes('amex')
+  );
+}
+
+/**
+ * Greedy 1-to-1 matching of NP vs MX transactions.
  *
- * Note: Maxirest and NP may have a fixed clock offset (different timezones
- * or system clocks), so we use time only as a tiebreaker — not as a filter.
+ * Match priority per NP transaction:
+ *   1. Exact amount match (±$1)
+ *   2. Surcharge match: NP ≈ MX × 1.10 (±$2, only for credit cards)
+ *
+ * When multiple candidates exist, the one with the closest time wins.
  */
 export function matchTransactions(npList: TxNP[], mxList: TxMX[]): MatchResult {
-  // Work on mutable copies so we can consume matched items
   const availableMX = [...mxList];
-
   const matched: MatchedPair[] = [];
   const unmatchedNP: TxNP[] = [];
 
   for (const np of npList) {
-    // Find all MX entries within amount tolerance
-    const candidates = availableMX
-      .map((mx, idx) => ({ mx, idx, diff: Math.abs(mx.importe - np.monto) }))
-      .filter((c) => c.diff <= AMOUNT_TOLERANCE);
+    const isCredit = isCreditCard(np.medioPago);
+
+    // Build candidate list: exact match first, then surcharge match for credit cards
+    type Candidate = { mx: TxMX; idx: number; withSurcharge: boolean };
+    let candidates: Candidate[] = availableMX
+      .map((mx, idx) => ({ mx, idx, withSurcharge: false }))
+      .filter((c) => Math.abs(c.mx.importe - np.monto) <= AMOUNT_TOLERANCE);
+
+    if (candidates.length === 0 && isCredit) {
+      // Try surcharge match: np.monto ≈ mx.importe * (1 + SURCHARGE_RATE)
+      candidates = availableMX
+        .map((mx, idx) => ({ mx, idx, withSurcharge: true }))
+        .filter((c) => Math.abs(c.mx.importe * (1 + SURCHARGE_RATE) - np.monto) <= 2);
+    }
 
     if (candidates.length === 0) {
       unmatchedNP.push(np);
       continue;
     }
 
-    // Among candidates, pick the one with the closest time
+    // Pick the candidate with the closest time
     const best = candidates.reduce((a, b) => {
-      const timeDiffA = Math.abs(toMinutes(np.time) - toMinutes(a.mx.time));
-      const timeDiffB = Math.abs(toMinutes(np.time) - toMinutes(b.mx.time));
-      return timeDiffA <= timeDiffB ? a : b;
+      const dtA = Math.abs(toMinutes(np.time) - toMinutes(a.mx.time));
+      const dtB = Math.abs(toMinutes(np.time) - toMinutes(b.mx.time));
+      return dtA <= dtB ? a : b;
     });
 
-    matched.push({ np, mx: best.mx });
-    availableMX.splice(best.idx, 1); // consume this MX transaction
+    matched.push({ np, mx: best.mx, withSurcharge: best.withSurcharge });
+    availableMX.splice(best.idx, 1);
   }
 
-  return { matched, unmatchedNP, unmatchedMX: availableMX };
+  return {
+    matched,
+    unmatchedNP,
+    unmatchedMX: availableMX,
+    totalMatched: matched.length,
+    totalNP: npList.length,
+  };
 }
 
 function toMinutes(time: string): number {
